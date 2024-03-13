@@ -1,0 +1,289 @@
+---
+title: "myanimelist"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+   html_document:
+     code_folding: hide
+     fig_width : 6
+     fig_length : 4
+     theme : dark
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(rstatix)
+library(skimr)
+library(naniar)
+```
+
+
+```{r}
+anime_data=read_csv("D:\\wallpapers and photos\\csv\\mal_top2000_anime.csv")
+```
+
+
+
+```{r}
+str(anime_data)
+skim(anime_data)
+vis_miss(anime_data)
+```
+
+there is no missing value in the data
+
+```{r}
+
+```
+
+lets do some data cleaning to get a better understanding about the data
+
+```{r}
+library(lubridate)
+anime=anime_data %>% 
+  rename("no"="...1") %>% 
+  rename("Theme"="Theme(s)") %>% 
+  rename("Episode"="Num. of episodes") %>% 
+  mutate_at(vars(Studio,Theme,Genres),str_squish) %>% 
+  mutate_at(vars(Studio,Theme,Genres),str_remove,"']") %>% 
+  mutate_at(vars(Studio,Theme,Genres),str_remove,"\\[.") %>% 
+  mutate_at(vars(Studio,Theme,Genres),str_remove_all,"\\'") %>% 
+  mutate_if(is.character,str_to_title) %>% 
+  mutate(Demographic=as.factor(Demographic)) %>% 
+  mutate(Type=as.factor(Type)) %>% 
+  separate(`Air Date`,into = c("start","End"),sep = "To") %>% 
+  mutate(start=mdy(start)) %>% 
+  mutate(End=mdy(End))
+  
+```
+
+
+
+```{r}
+anime
+anime %>% 
+  mutate(Studio=str_remove_all(Studio,"\"\\]")) %>% 
+  separate(Studio,into = c("studio 1","studio 2"),sep = ",") %>% 
+  count(`studio 1`,sort = TRUE)
+
+anime %>% 
+  mutate(Studio=str_remove_all(Studio,"\"\\]")) %>% 
+  separate(Studio,into = c("studio 1","studio 2"),sep = ",") %>% 
+  count(`studio 2`,sort = TRUE) %>% 
+  filter(!`studio 2` %in% NA)
+  
+```
+
+
+
+
+
+
+hence the data is pretty much cleaned......
+
+```{r}
+anime
+```
+```{r}
+write.csv(anime,file = "D:\\wallpapers and photos\\csv\\anime.csv")
+```
+
+
+```{r}
+library(patchwork)
+library(plotly)
+popularity_score=anime %>% 
+  spread(value = "Score",key= "Demographic") 
+shounen=popularity_score %>% 
+  filter(!Shounen %in% NA) %>% 
+  count(Shounen) 
+g1=ggplot(shounen,aes(y=n,x=Shounen))+
+  geom_bar(stat = "identity",fill= "#FF61C3") + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.y = element_text(size = 5),
+    panel.background = element_rect(fill = "gray98"),
+    plot.background = element_rect(fill = "aliceblue")) +labs(y = "numbers", x = "Ratings") + theme(axis.title = element_text(size = 8),
+    plot.title = element_text(size = 12,
+        face = "bold", hjust = 0.5)) +labs(title = "Shounen")
+ggplotly(g1)
+
+
+
+shoujo=popularity_score %>% 
+  filter(!Shoujo %in% NA) %>% 
+  count(Shoujo) 
+g2=ggplot(shoujo,aes(y=n,x=Shoujo))+
+  geom_bar(stat = "identity",fill= "#D39200") + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.y = element_text(size = 5),
+    panel.background = element_rect(fill = "gray98"),
+    plot.background = element_rect(fill = "aliceblue")) +labs(y = "numbers", x = "Ratings")+ theme(axis.title = element_text(size = 8),
+    plot.title = element_text(size = 12,
+        face = "bold", hjust = 0.5)) +labs(title = "Shoujo")
+ggplotly(g2)
+
+
+seinen=popularity_score %>% 
+  filter(!Seinen %in% NA) %>% 
+  count(Seinen) 
+g3=ggplot(seinen,aes(y=n,x=Seinen))+
+  geom_bar(stat = "identity",fill= "#93AA00") + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.y = element_text(size = 5),
+    panel.background = element_rect(fill = "gray98"),
+    plot.background = element_rect(fill = "aliceblue")) +labs(y = "numbers", c = "Ratings")+ theme(axis.title = element_text(size = 8),
+    plot.title = element_text(size = 12,
+        face = "bold", hjust = 0.5)) +labs(title = "Seinen")
+ggplotly(g3)
+
+
+kids=popularity_score %>% 
+  filter(!Kids %in% NA) %>% 
+  count(Kids) 
+g4=ggplot(kids,aes(y=n,x=Kids))+
+  geom_bar(stat = "identity",fill= "#00C19F") + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.y = element_text(size = 5),
+    panel.background = element_rect(fill = "gray98"),
+    plot.background = element_rect(fill = "aliceblue")) +labs(y = "numbers", x = "Ratings")+ theme(axis.title = element_text(size = 8),
+    plot.title = element_text(size = 12,
+        face = "bold", hjust = 0.5)) +labs(title = "Kids")
+ggplotly(g4)
+
+
+Josei=popularity_score %>% 
+  filter(!Josei %in% NA) %>% 
+  count(Josei) 
+g4=ggplot(Josei,aes(y=n,x=Josei))+
+  geom_bar(stat = "identity",fill= "#DB72FB",bins=40) + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.y = element_text(size = 5),
+    panel.background = element_rect(fill = "gray98"),
+    plot.background = element_rect(fill = "aliceblue")) +labs(y = "numbers", x = "Ratings")+ theme(axis.title = element_text(size = 8),
+    plot.title = element_text(size = 12,
+        face = "bold", hjust = 0.5)) +labs(title = "Josei")
+ggplotly(g4)
+
+```
+
+
+```{r}
+g1+g2/g3+g4
+```
+
+in terms of anime ranking shounen has most above 9 rating anime follwed by shoujo. Seinen has the most stable rating but does not have a anime over 9 ratings
+
+
+```{r}
+x1=ggplot(anime,aes(x=Type,y=Score,color=Type,fill=Type))+
+  geom_violin() + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text = element_text(colour = "deepskyblue4"),
+    plot.title = element_text(colour = "azure3"),
+    panel.background = element_rect(fill = "gray99"),
+    plot.background = element_rect(colour = "aliceblue"))
+
+
+x2=ggplot(anime,aes(x=Type,y=Score,color=Type,fill=Type))+
+  geom_point() + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text = element_text(colour = "deepskyblue4"),
+    plot.title = element_text(colour = "azure3"),
+    panel.background = element_rect(fill = "gray99"),
+    plot.background = element_rect(colour = "aliceblue"))
+
+
+x3=ggplot(anime,aes(x=Type,fill=Type))+
+  geom_bar() +
+  facet_wrap(~Demographic)
+
+
+ggplotly(x1)
+ggplotly(x2)
+x3
+x1/x2
+```
+
+Thus it is clear that in terms of anime preference TV anime is popular , followed by Movie.
+
+
+
+
+```{r}
+avg_success=anime %>% 
+  group_by(Demographic) %>% 
+  summarise(mean_score=mean(Score)) %>% 
+  arrange(desc(mean_score)) 
+
+ggplot(avg_success %>% filter(!Demographic %in% "Josei"),aes(x=Demographic,y=mean_score,color=Demographic,fill=Demographic))+
+  geom_bar(stat = "Identity")
+  
+```
+
+
+
+because of sheer number of shounen anime avg mean score is pretty high. But seinen is close second instead of shoujo. Meaning maybe seinen and shounen makes the most decent anime among others
+
+```{r}
+library(DataExplorer)
+library(corrgram)
+plot_correlation(anime)
+anime %>% 
+  select(-no) %>% 
+  
+  corrgram(order=TRUE, upper.panel=panel.cor,main="cor matrix for all data")
+```
+
+
+
+
+```{r}
+anime %>% 
+  filter(Demographic %in% "Shoujo") %>%
+  select(-no) %>% 
+  corrgram(order=TRUE, upper.panel=panel.cor,main="corr score matrix for shoujo")
+
+
+
+anime %>% 
+  filter(Demographic %in% "Seinen") %>% 
+  select(-no) %>% 
+  corrgram(order=TRUE, upper.panel=panel.cor,main="corr score matrix for seinen")
+
+
+
+anime %>% 
+  filter(Demographic %in% "Shounen") %>% 
+  select(-no) %>% 
+  corrgram(order=TRUE, upper.panel=panel.cor,main="corr score matrix for shounen")
+
+
+```
+from the correlarion plot it is clear that popularity of an anime depends on its score, so anime with better score has a chance to become more popular
+
+H0=median  difference is same
+
+```{r}
+anime %>% 
+  select(Type,Score) %>% 
+  kruskal.test(data=.,Score~Type)
+```
+thus the null hypothesis is rejected meaning there is a difference between movie,ona,music,Special,TV,Ova ratings
+
+
+
+```{r}
+anime %>% 
+  mutate(Score=cut(Score,breaks=3,labels=c( "meh","good","very good"))) %>% 
+  select(Score,Type) %>% 
+  table() %>% 
+  chisq.test() %>% 
+  tidy()
+```
+
+thus the null hypothesis is rejected meaning , relation between type and score exists

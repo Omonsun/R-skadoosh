@@ -1,0 +1,291 @@
+---
+title: "EDA on happiness data set"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+   html_document:
+    fig_width: 6
+    fig_height: 4
+    code_folding: hide
+    theme: dark
+---
+
+```{r}
+knitr:: opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+hap=read.csv("D:\\wallpapers and photos\\2017.csv")
+```
+
+**DATA CLEANING**
+
+first we will rename the data for our simplification, whisker high & whisker low seems useless. thus we can perhaps remove them
+
+```{r}
+library(tidyverse)
+hap=hap %>%
+  select(-c(Whisker.high,Whisker.low)) %>% 
+  rename("Economy"="Economy..GDP.per.Capita.") %>% 
+  rename("life.exp"="Health..Life.Expectancy.") %>% 
+  rename( "Trust"="Trust..Government.Corruption.")
+
+```
+
+**MISSING DATA**
+
+its important to check if our data is missing or not. using we can use vis_miss function and skim funtion to see any missing data or any outlier
+
+```{r}
+library(naniar)
+library(skimr)
+library(knitr)
+vis_miss(hap)
+skim(hap) 
+```
+
+Hey, we have no missing data. lucky.....:)
+
+**SIMPLIFYING DATA**
+
+using so many country seems like a hassle. So it we will find the common characteristics of the data ,in this is instance country can be simplified by continent.
+
+```{r}
+hap$continent=NA
+hap$continent[which(hap$Country %in% c('Afghanistan','Armenia','Azerbaijan','Bahrain','Bangladesh','Bhutan','Brunei','Cambodia','China','Cyprus','Georgia','India','Indonesia','Iran','Iraq','Israel','Japan','Jordan','Kazakhstan','Kuwait'
+,'Kyrgyzstan'
+,'Laos'
+,'Lebanon'
+,'Malaysia'
+,'Maldives'
+,'Mongolia'
+,'Myanmar'
+,'Nepal'
+,'North Korea'
+,'Oman'
+,'Pakistan'
+,'Philippines'
+,'Qatar'
+,'Saudi Arabia'
+,'Singapore'
+,'South Korea'
+,'Sri Lanka'
+,'State of Palestine'
+,'Syria'
+,'Tajikistan'
+,'Thailand'
+,'Timor-Leste'
+,'Turkey'
+,'Turkmenistan'
+,'United Arab Emirates'
+,'Uzbekistan'
+,'Vietnam'
+,'Yemen'))]='asia'
+hap$continent[which(hap$Country %in% c("Norway", "Denmark", "Iceland", "Switzerland", "Finland",
+"Netherlands", "Sweden", "Austria", "Ireland", "Germany",
+"Belgium", "Luxembourg", "United Kingdom", "Czech Republic",
+ "Malta", "France", "Spain", "Slovakia", "Poland", "Italy",
+                                   "Russia", "Lithuania", "Latvia", "Moldova", "Romania",
+                                   "Slovenia", "North Cyprus", "Cyprus", "Estonia", "Belarus",
+                                   "Serbia", "Hungary", "Croatia", "Kosovo", "Montenegro",
+                                   "Greece", "Portugal", "Bosnia and Herzegovina", "Macedonia",
+                                   "Bulgaria", "Albania", "Ukraine"))]="Europe"
+hap$continent[which(hap$Country %in% c("Canada", "Costa Rica", "United States", "Mexico",  
+                                   "Panama","Trinidad and Tobago", "El Salvador", "Belize", "Guatemala",
+                                   "Jamaica", "Nicaragua", "Dominican Republic", "Honduras",
+                                   "Haiti"))]="North america"
+hap$continent[which(hap$Country %in% c("Chile", "Brazil", "Argentina", "Uruguay",
+                                   "Colombia", "Ecuador", "Bolivia", "Peru",
+                                   "Paraguay", "Venezuela"))]="South america"
+hap$continent[which(hap$Country %in% c("New Zealand", "Australia"))] <- "Australia"
+hap$continent[is.na(hap$continent)]="africa"
+skim(hap)
+happiness=hap %>% 
+  select(continent,-Country,everything()) %>% 
+  mutate(continent=as.factor(continent)) 
+```
+
+**CORRELATION:**
+
+now we will see the correlation among our data. for this plot_correlation and corrgram is very helpful.
+
+quick reminder to use order=TRUE and Upper.panel=panel.cor for a right interpretation
+
+```{r}
+library(corrgram)
+library(DataExplorer)
+happiness %>%
+  plot_correlation()
+happiness %>%
+  corrgram(order = TRUE, upper.panel=panel.cor,main="overall correlation plot")
+```
+
+from the corrgram correlation plot we can see that for all continent the relation for happiness score depends on
+
+economy\>life exp\> family\>freedom\>dystopia\>trust\>generosity
+
+meaning the better the economy ,the better life exp is and happiness score increases
+
+```{r}
+happiness %>% 
+  filter(continent=="asia") %>% 
+  corrgram(order = TRUE, upper.panel = panel.cor,main= "corrrelation plot for asia") 
+```
+
+in asia happiness score depends on
+
+economy\>family\>life exp ....
+
+meaning for asian people family holds great meaning,as the impact happiness score
+
+```{r}
+happiness %>% 
+  filter(continent=="Europe") %>% 
+  corrgram(order = TRUE, upper.panel = panel.cor,main=" correlation plot for europe")
+```
+
+here the relation between the happiness score and other things are
+
+freedom\>trust\>economy\>family\>life Exp
+
+meaning people of europe continent are free spirited, and trust is very important for their happiness.
+
+Interesting....
+
+```{r}
+happiness %>% 
+  filter(continent %in% "South america") %>% 
+  corrgram(order = TRUE,upper.panel= panel.cor,main="correlation plot for south america")
+```
+
+for people of south america dystopia residual is very imortant for their happiness.
+
+```{r}
+happiness %>% 
+  filter( continent=="North america") %>% 
+  corrgram(order=TRUE, upper.panel = panel.cor,main="correlation plot for north america")
+```
+
+like Asian people of north america family, economy,life exp is very important for their happiness. They seems to love their freedom also
+
+```{r}
+happiness %>% 
+  filter(continent=="africa") %>% 
+  corrgram(order= TRUE, upper.panel = panel.cor,main="correlation plot for africa")
+
+```
+
+for africans economy and life Exp is the most important. for happiness generosity and trust has the least impact
+
+```{r}
+
+  corrgram(happiness %>%select(-Country) %>%  filter(continent=="Australia") ,order= TRUE, upper.panel = panel.cor,main="correlation plot for australia")
+```
+
+this is awkward , maybe countries of australia continent has very similar data.
+
+```{r}
+```
+
+**BARPLOT FOR THEIR AVG DATA:**
+
+for bar plot we will summarize the data with their mean for a beautiful barplot. we will group the data by continent and summarise(across(everything(),mean))
+
+then we will melt the data from reshape2 package so we can get a new data set with all the variables and their values. In ggplot we will use stat="identity" so that we can use the both x and y values in the bar plot.
+
+pretty neat....right??
+
+```{r}
+library(reshape2)
+barplot_data=happiness %>% 
+  select(-Country,-Happiness.Rank) %>% 
+  group_by(continent) %>% 
+  summarise(across(everything(),mean,na.rm=TRUE))
+barplot_data_melt=melt(barplot_data)
+ggplot(barplot_data_melt,aes(x=continent,y=value,color=continent,fill=continent))+
+  geom_bar(stat="identity")+
+  facet_wrap(~variable) + theme(plot.subtitle = element_text(family = "Bookman",
+    face = "bold"), panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    panel.background = element_rect(fill = "white")) +labs(title = "BARPLOT for AVG data", subtitle = "Barplot for comparing different factors")
+```
+
+europe,north america , south america have a good happiness score, asia is decent, but africa is the lowest,
+
+in terms of economy europe is the highest and africa is the lowest . asia, north & south america are pretty decent.Same pattern follows for the family.
+
+```{r}
+library(gridExtra)
+happiness=happiness %>% 
+  filter(continent!="Australia") %>% 
+  select(-Happiness.Rank)
+g1=ggplot(happiness,aes(x=continent,y=Happiness.Score,color=continent,fill=continent)) +
+  geom_boxplot(alpha=0.6) + theme(panel.background = element_rect(fill = NA))
+g2=ggplot(happiness,aes(x=continent,y=Happiness.Score,color=continent,fill=continent))+
+  geom_violin(alpha=0.6) + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    axis.text.x = element_text(size = 15),
+    panel.background = element_rect(fill = NA))
+grid.arrange(g1,g2,nrow=2,ncol=1)
+
+```
+
+from above we can see that two figures can be merged using gridEXTRA package ,using grid.arrange function
+
+**SCATTER PLOT USING REGRESSION LINE FOR ESTIMATING CORRELATION:**
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=Economy,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(panel.grid.major = element_line(linetype = "blank"),
+    panel.grid.minor = element_line(linetype = "blank"),
+    plot.title = element_text(face = "bold",
+        colour = "dodgerblue4"), panel.background = element_rect(fill = "white")) +labs(title = "Economy vs Happiness.Score")
+```
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=Family,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(axis.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold"),
+    panel.background = element_rect(fill = NA)) +labs(title = "Family vs. happiness.score")
+```
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=Trust,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(plot.title = element_text(face = "bold"),
+    panel.background = element_rect(fill = NA)) +labs(title = "Trust vs happiness.Score")
+```
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=Freedom,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(axis.text = element_text(size = 12,
+    face = "bold"), panel.background = element_rect(fill = NA)) +labs(title = "Freedom vs. happiness.score")
+```
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=life.exp,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(panel.background = element_rect(fill = NA)) + theme(plot.title = element_text(face = "bold")) +labs(title = "life.exp vs happiness.score")
+```
+
+```{r}
+ggplot(happiness,aes(x=Happiness.Score,y=Dystopia.Residual,color=continent))+
+  geom_point(size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=continent,fill=continent),fullrange=TRUE,method="lm")+
+  facet_wrap(~continent) + theme(panel.grid.major = element_line(linetype = "blank")) +labs(title = "Dystopia va happiness.score") + theme(axis.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold"),
+    panel.background = element_rect(fill = NA))
+```
+
+```{r}
+
+```

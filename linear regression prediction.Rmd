@@ -1,0 +1,343 @@
+---
+title: "prediction with linear regression"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    toc: yes
+
+---
+
+
+
+```{r}
+library(tidyverse)
+library(mlr)
+library(imputeTS)
+library(prettydoc)
+
+```
+
+#loading the dataset for our prediction
+
+```{r}
+coffee=read.csv("D:\\wallpapers and photos\\csv\\coffee_dataset.csv")
+names(coffee)
+```
+
+this is a very large data set . many things can be done but today we will just predict the coffee total cup points using liner regression
+
+```{r}
+library(naniar)
+
+
+coffee=coffee %>% 
+  select_if(is.numeric)
+
+
+vis_miss(coffee)
+
+```
+
+our predictor variable has no missing data. some of the data like altitude_low_meters,altitude_high_meters are missing. if we remove the NA and see the correlation between them and coffee total cup point is decent then we can impute them otherwise its not necessary
+
+```{r}
+library(DataExplorer)
+coffee_gap=coffee %>% 
+  filter(!is.na(altitude_mean_meters),!is.na(Quakers))
+coffee_gap %>% 
+  select(Total.Cup.Points,altitude_mean_meters,Quakers) %>% 
+  plot_correlation(ggtheme = theme_light(),title = "correlation between Total.Cup.Points vs altitude_mean_meters")
+```
+
+as the correlation is very weak we can remove the features that contain na value
+
+```{r}
+coffee_new=coffee %>% 
+  select(-c(altitude_high_meters,altitude_low_meters,altitude_mean_meters,X,Quakers))
+#making a task
+
+coffee.task=makeRegrTask(data = coffee_new, target ="Total.Cup.Points")
+
+coffee.task
+
+
+#making a learner
+
+coffee.learner=makeLearner("regr.lm")
+
+#spliting the dataset
+ho = makeResampleInstance("Holdout",coffee.task)
+coffee.train = subsetTask(coffee.task,ho$train.inds[[1]])
+coffee.test = subsetTask(coffee.task,ho$test.inds[[1]])
+
+
+coffee.train
+coffee.test
+
+
+
+#this means the data will look like 
+
+
+library(caTools)
+
+
+sample=sample.split(coffee_new$Total.Cup.Points,SplitRatio = 2/3)
+train=subset(coffee_new,sample==T)
+test=subset(coffee_new,sample==F)
+
+
+
+
+
+```
+
+```{r}
+#automating feature selection
+library(FSelectorRcpp)
+
+
+filtervals=generateFilterValuesData(coffee.train,method =  "linear.correlation")
+
+filtervals
+
+
+
+plotFilterValues(filtervals)
+
+
+
+
+```
+
+this shows by using linear correlation we can identify which feature to use for our model
+
+```{r}
+#making a filter wrapper to use them in our hypermeter tuning and sometimes this will work as a new learner
+
+filterwrapper=makeFilterWrapper(learner = coffee.learner, fw.method = "linear.correlation")
+
+
+getParamSet(filterwrapper)
+
+
+
+
+#hypermeter tuning the model
+
+
+#parameter setting, means the in terms of usefulness the absolute value will be lowest at 2 and highest at 12
+
+ps=makeParamSet(makeIntegerParam("fw.abs",1,12))
+
+
+#search control
+
+#we will use grid search for the best possible ans
+
+sc=makeTuneControlGrid()
+
+
+kfold=makeResampleDesc("CV", iters=10)
+
+#tuningparameters
+
+res = resample(coffee.learner,coffee.train,kfold,rmse)
+
+tune=tuneParams(filterwrapper,coffee.train, par.set=ps,control=sc,resampling=kfold,rmse)
+
+tune
+res
+
+
+#new task with the filtered data
+
+coffee.filter.feature=filterFeatures(coffee.train,fval=filtervals,abs = unlist(tune$x))
+
+
+coffee.filter.feature
+
+
+
+
+```
+
+hurray!! we got a rmse of 0.0193997. which is decent
+
+```{r}
+
+train.model=train(coffee.learner,coffee.filter.feature)
+getLearnerModel(train.model)
+
+pred=predict(train.model,coffee.test)
+as.data.frame(pred)
+
+```
+
+our predictions are very close it did pretty decent
+
+```{r}
+tuneWrapper <- makeTuneWrapper(filterwrapper, par.set=ps,control=sc,resampling=kfold)
+filterGamCV <- resample(tuneWrapper, coffee.train, resampling = kfold,rmse)
+
+filterGamCV
+
+
+```
+```{r}
+#task ready
+coffee_new
+
+tsk=makeRegrTask(data = coffee_new, target = "Total.Cup.Points")
+
+lrn=makeLearner("regr.gamboost")
+
+imputeLearner=imputeLearner("regr.rpart")
+
+makeImputeWrapper.lrn=makeImputeWrapper(learner = lrn)
+
+#feature
+
+
+filterval=generateFilterValuesData(task = tsk,method = "linear.correlation")
+
+
+plotFilterValues(filterval)
+
+
+
+makeFilterWrapper.lrn=makeFilterWrapper(learner = makeImputeWrapper.lrn, fw.method="linear.correlation")
+
+
+
+# parameterset
+
+
+ps=makeParamSet(
+  makeIntegerParam("fw.abs", 0 ,10)
+)
+
+
+kfold=makeResampleDesc("CV", iters=10)
+
+
+
+sc=makeTuneControlGrid()
+
+
+tuneparam=tuneParams(learner = makeFilterWrapper.lrn , task = tsk , resampling=kfold , control=sc ,par.set= ps ,rmse)
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+```{r}
+tuneparam
+getParamSet(makeFilterWrapper.lrn)
+
+
+
+#filterfeature
+
+filterFeatures=filterFeatures(tsk,fval = filterval , abs = unlist(tuneparam$x))
+
+tr=train(makeImputeWrapper.lrn, filterFeatures)
+
+
+
+as.data.frame(predict(tr,tsk))
+
+
+tuneWrapper=makeTuneWrapper(learner=makeFilterWrapper.lrn,resampling=kfold,par.set=ps,
+control=sc)
+
+
+cv=resample(tuneWrapper,tsk,kfold,rmse)
+
+cv
+
+
+
+
+```
+
+
+
+```{r}
+makeImputeWrapper.lrn$predict.type
+```
+
+
+
+
+```{r}
+coffee
+
+
+
+```
+
+
+
+
+
+```{r}
+cfetask=makeRegrTask(data = coffee, target = "Total.Cup.Points")
+
+lrn.lm=makeLearner("regr.glmnet", alpha= 0 , id= "ridge")
+
+
+imp=imputeLearner("regr.rpart")
+
+lrn.lm.imp=makeImputeWrapper(learner = lrn.lm,classes = list(numeric=imp,integer=imp))
+
+getParamSet(lrn.lm.imp)
+
+ps=makeParamSet(
+  makeNumericParam("s",0,10)
+)
+
+kfold2=makeResampleDesc("RepCV", folds=10,reps=5)
+
+sc=makeTuneControlRandom(maxit = 5)
+
+
+lrn.lm.imp.tune=makeTuneWrapper(learner = lrn.lm.imp, par.set=ps,control = sc, resampling = kfold2,rmse)
+
+
+resample(learner =lrn.lm.imp.tune, task = cfetask,kfold_outer)
+
+
+tp=tuneParams(learner = lrn.lm.imp,task=cfetask, par.set=ps,control = sc, resampling = kfold2,rmse)
+
+
+lrn.lm.imp.tune.set=setHyperPars(learner = lrn.lm.imp,par.vals = tp$x)
+
+
+
+
+
+
+```
+```{r}
+tp
+
+model.lm=train(lrn.lm.imp.tune.set,cfetask)
+
+
+getLearnerModel(model.lm)
+
+```
+
+

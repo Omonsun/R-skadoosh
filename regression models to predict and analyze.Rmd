@@ -1,0 +1,641 @@
+---
+title: "model optimization"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning  = FALSE)
+knitr::opts_chunk$set(message  = FALSE)
+
+```
+
+```{r}
+library(mlr)
+library(tidyverse)
+library(reshape2)
+
+
+data("airquality")
+
+air=airquality %>% 
+  filter(!is.na(Ozone))
+
+
+
+
+
+
+
+
+lin1=ggplot(air) +
+  aes(
+    y = Solar.R,
+    x = Ozone,
+    colour = Ozone,
+    size = Ozone,
+  ) +
+  geom_point(alpha=0.6,size=6) +
+  geom_smooth(color="red",se=TRUE)+
+  scale_color_viridis_c(option = "magma", direction = -1) +
+  theme_bw()
+
+
+lin2=ggplot(air) +
+  aes(
+    y = Temp,
+    x = Ozone,
+    colour = Ozone,
+    size = Ozone,
+  ) +
+  geom_point(alpha=0.6,size=6) +
+  geom_smooth(color="red",se=TRUE)+
+  scale_color_viridis_c(option = "magma", direction = -1) +
+  theme_bw()
+
+
+
+
+
+lin3=ggplot(air) +
+  aes(
+    y = Wind,
+    x = Ozone,
+    colour = Ozone,
+    size = Ozone,
+  ) +
+  geom_point(alpha=0.6,size=6) +
+  geom_smooth(color="red",se=TRUE)+
+  scale_color_viridis_c(option = "magma", direction = -1) +
+  theme_bw()
+
+
+lin4=ggplot(air) +
+  aes(
+    y = Month,
+    x = Ozone,
+    colour = Ozone,
+    size = Ozone,
+  ) +
+  geom_point(alpha=0.6,size=6) +
+  geom_smooth(color="red",se=TRUE)+
+  scale_color_viridis_c(option = "magma", direction = -1) +
+  theme_bw()
+
+
+
+lin5=ggplot(air) +
+  aes(
+    y = Day,
+    x = Ozone,
+    colour = Ozone,
+    size = Ozone,
+  ) +
+  geom_point(alpha=0.6,size=6) +
+  geom_smooth(color="red",se=TRUE)+
+  scale_color_viridis_c(option = "magma", direction = -1) +
+  theme_bw()
+
+
+
+library(patchwork)
+
+
+(lin1+lin2+lin3)/(lin4+lin5)
+
+
+
+
+
+
+
+
+
+```
+
+```{r}
+
+
+
+
+fit=lm(Ozone~.,data=air)
+summary(fit)
+
+
+  
+plot(fit)
+
+
+
+```
+
+```{r}
+
+library(naniar)
+
+vis_miss(air,cluster = F)
+
+
+visdat::vis_dat(air,palette = "cb_safe" )
+
+```
+
+```{r}
+task=makeRegrTask(data=air,target = "Ozone")
+lrn.lm=makeLearner("regr.lm")
+lrn.gam=makeLearner("regr.gamboost")
+
+#if our model over fits then we can use below models
+#if does not we will do it anyways " _ "
+lrn.ridge=makeLearner("regr.glmnet",alpha=0,id="ridge")
+lrn.lasso=makeLearner("regr.glmnet",alpha=1,id="Lasso")
+lrn.elastic=makeLearner("regr.glmnet",id="elastic")
+```
+
+```{r}
+
+#linearmodel
+
+
+imputeMethod=imputeLearner("regr.rpart")
+
+lrn.lm.imp=makeImputeWrapper(learner = lrn.lm, classes = list(integer=imputeMethod) )
+
+
+#filteringFeature
+
+fval=generateFilterValuesData(task,method = "linear.correlation")
+
+
+plotFilterValues(fval)
+
+
+lrn.lm.imp.filter=makeFilterWrapper(learner = lrn.lm.imp,fw.method = "linear.correlation")
+
+getParamSet(lrn.lm.imp.filter)
+
+
+
+#parameters set
+
+ps=makeParamSet(
+  makeNumericParam("fw.perc",0.3,1)
+)
+
+
+sc=makeTuneControlGrid()
+
+
+
+kfold=makeResampleDesc("CV", iters=5)
+
+#crossvalidation and performace
+
+
+
+
+tp=tuneParams(learner = lrn.lm.imp.filter,task = task , par.set = ps, resampling = kfold, control = sc,rmse)
+
+#or
+
+lrn.lm.imp.filter.tune=makeTuneWrapper(learner = lrn.lm.imp.filter, par.set = ps, resampling = kfold, control = sc)
+
+
+CV=resample(learner = lrn.lm.imp.filter.tune,task = task ,resampling = kfold,rmse)
+
+
+
+
+model1=train(lrn.lm.imp.filter.tune,task)
+pred1=predict(model1,task)
+
+tp
+CV
+performance(pred1,rmse)
+
+
+
+```
+
+```{r}
+getLearnerModel(model1)
+```
+
+```{r}
+#nonlinear model
+
+
+task=makeRegrTask(data=air,target = "Ozone")
+lrn.gamboost=makeLearner("regr.gamboost")
+
+#impute
+
+
+imputeMethod=imputeLearner("regr.rpart")
+
+lrn.gam.impute=makeImputeWrapper(learner = lrn.gam, classes = list(integer=imputeMethod))
+
+
+#automate filter feature
+
+
+lrn.gam.impute.filter=makeFilterWrapper(learner = lrn.gam.impute,fw.method = "linear.correlation")
+
+
+getParamSet(lrn.gam.impute.filter)
+
+
+#paraset
+
+
+ps=makeParamSet(
+  makeNumericParam("fw.perc",0.2,1)
+)
+
+
+kfold=makeResampleDesc("CV",iters=5)
+
+
+tc=makeTuneControlGrid()
+
+
+
+#parameter tuning and cross vaalidatiom
+
+
+tp=tuneParams(learner = lrn.gam.impute.filter,task = task,par.set = ps,resampling = kfold,control = tc,rmse)
+
+
+#or
+
+
+lrn.gam.impute.filter.tune=makeTuneWrapper(learner = lrn.gam.impute.filter,par.set = ps,resampling = kfold,control = tc)
+
+
+resample(learner = lrn.gam.impute.filter.tune,task=task,resampling = kfold,rmse)
+
+
+#model.train
+
+
+model2=train(lrn.gam.impute.filter.tune,task)
+prediction2=predict(model2,task)
+performance(prediction2,rmse)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+```{r}
+tuning=generateHyperParsEffectData(tune.result = tp)
+tuning$data
+
+
+library(plotly)
+
+
+plot=plotHyperParsEffect(tuning, y ="rmse.test.rmse",x="fw.perc",plot.type="line")
+
+plot
+
+
+```
+
+```{r}
+#elastic net
+#lasso
+#ridge regression
+
+task
+
+lrn.ridge=makeLearner("regr.glmnet", id="ridge",alpha=0)
+
+
+imputeMethod=imputeLearner("regr.rpart")
+
+lrn.ridge.imp=makeImputeWrapper(lrn.ridge,classes = list(integer=imputeMethod))
+
+
+ps2=makeParamSet(makeNumericParam("s",0,100))
+
+
+kfold2=makeResampleDesc("CV", iters=5)
+
+
+tc=makeTuneControlGrid()
+
+
+lrn.ridge.imp.tune=makeTuneWrapper(learner = lrn.ridge.imp,par.set=ps2,control = tc,resampling=kfold2)
+
+
+
+crossvalidate=resample(learner = lrn.ridge.imp.tune,task = task, resampling = kfold2,rmse)
+
+
+tp.ridge=tuneParams(learner = lrn.ridge.imp,par.set=ps2,control = tc,resampling=kfold2,task = task,rmse)
+
+crossvalidate
+
+
+
+ridge.hyperpars=generateHyperParsEffectData(tp.ridge)
+
+
+
+plotHyperParsEffect(ridge.hyperpars,x="s",y="rmse.test.rmse",plot.type = "line")
+
+
+model.ridge=train(lrn.ridge.imp.tune,task)
+
+predict.ridge=predict(model.ridge,task)
+
+
+
+performance(predict.ridge,rmse)
+
+
+
+
+
+```
+
+```{r}
+
+
+
+
+```
+
+```{r}
+task
+
+lrn.lasso=makeLearner("regr.glmnet", id="lasso",alpha=1)
+
+
+imputeMethod=imputeLearner("regr.rpart")
+
+lrn.lasso.imp=makeImputeWrapper(lrn.lasso,classes = list(integer=imputeMethod))
+
+
+ps2=makeParamSet(makeNumericParam("s",0,100))
+
+
+kfold2=makeResampleDesc("CV", iters=10)
+
+
+tc=makeTuneControlGrid()
+
+
+lrn.lasso.imp.tune=makeTuneWrapper(learner = lrn.lasso.imp,par.set=ps2,control = tc,resampling=kfold2)
+
+
+
+crossvalidate2=resample(learner = lrn.lasso.imp.tune,task = task, resampling = kfold2,rmse)
+
+
+tp.lasso=tuneParams(learner = lrn.lasso.imp,par.set=ps2,control = tc,resampling=kfold2,task = task,rmse)
+
+
+
+
+crossvalidate2
+
+
+
+lasso.hyperpars=generateHyperParsEffectData(tp.lasso)
+
+
+
+plotHyperParsEffect(lasso.hyperpars,x="s",y="rmse.test.rmse",plot.type = "line")
+
+
+model.lasso=train(lrn.lasso.imp.tune,task)
+
+predict.lasso=predict(model.lasso,task)
+
+
+
+performance(predict.lasso,rmse)
+
+```
+
+```{r}
+task 
+
+
+lrn.elasticnet=makeLearner("regr.glmnet",id="elastic")
+
+
+
+imputeMethod=imputeLearner("regr.rpart")
+
+
+lrn.elasticnet.impute=makeImputeWrapper(learner = lrn.elasticnet, classes = list(integer=imputeMethod,numeric=imputeMethod))
+
+
+getParamSet(lrn.elasticnet.impute)
+
+
+
+
+ps2=makeParamSet(makeNumericParam("s",0,100))
+
+kfold3=makeResampleDesc("CV",iters=10)
+
+tc=makeTuneControlGrid()
+
+
+lrn.elasticnet.impute.tune=makeTuneWrapper(learner = lrn.elasticnet.impute,par.set = ps2,control = tc,resampling = kfold3)
+
+cv=resample(task,learner=lrn.elasticnet.impute.tune,resampling = kfold3 ,rmse)
+
+
+tp.elasticnet=tuneParams(task,learner=lrn.elasticnet.impute.tune,resampling = kfold3 ,par.set = ps2,control = tc,rmse)
+
+
+
+model.elastic=train(learner=lrn.elasticnet.impute.tune,task)
+
+
+```
+
+```{r}
+elastic.predict=predict(model.elastic,task)
+
+performance(elastic.predict,rmse)
+
+
+cv
+```
+
+```{r}
+
+task
+
+
+lrn.knn=makeLearner("regr.kknn")
+
+imputeMethod=imputeLearner("regr.rpart")
+
+lrn.knn.imp=makeImputeWrapper(learner = lrn.knn,classes = list(numeric=imputeMethod,integer=imputeMethod))
+
+getParamSet(lrn.knn.imp)
+
+
+
+ps=makeParamSet(
+  makeIntegerParam("k",1,30)
+  
+)
+
+kfold=makeResampleDesc("CV",iters=10)
+
+
+sc=makeTuneControlGrid()
+
+
+
+lrn.knn.imp.tune=makeTuneWrapper(learner=lrn.knn.imp,resampling=kfold,control=sc,par.set = ps)
+
+
+
+cv=resample(learner = lrn.knn.imp.tune,task=task,resampling = kfold,rmse)
+
+
+cv
+
+
+tp=tuneParams(learner=lrn.knn.imp,resampling=kfold,control=sc,par.set = ps,task=task,rmse)
+
+
+
+
+
+model.kknn=train(learner = lrn.knn.imp.tune,task = task)
+
+predict.knn=predict(model.kknn,task)
+
+performance(predict.knn,rmse)
+
+
+
+
+
+
+
+
+```
+
+```{r}
+
+task
+
+
+lrn.rand=makeLearner("regr.randomForest")
+
+
+impute=imputeLearner("regr.rpart")
+
+lrn.rand.impute=makeImputeWrapper(learner = lrn.rand,classes = list(integer=impute))
+
+
+getParamSet(lrn.rand.impute)
+
+
+ps=makeParamSet(
+  makeIntegerParam("ntree",30,30),
+  makeIntegerParam("mtry",1,30),
+  makeIntegerParam("nodesize",5,10),
+  makeIntegerParam("maxnodes",1,30)
+)
+
+
+kfold=makeResampleDesc("CV",iters=5)
+
+
+sc=makeTuneControlRandom(maxit = 10)
+
+
+
+lrn.rnd.impute.tune=makeTuneWrapper(learner = lrn.rand.impute,kfold,par.set = ps,control = sc)
+
+
+
+resample(lrn.rnd.impute.tune,task,kfold,rmse)
+
+
+
+
+
+
+
+
+
+```
+
+```{r}
+task
+
+
+lrn.xg=makeLearner("regr.xgboost")
+
+method=imputeLearner("regr.rpart")
+
+
+lrn.xg.imp=makeImputeWrapper(learner = lrn.xg , classes=list(integer=method))
+
+
+
+getParamSet(lrn.xg.imp)
+
+ps=makeParamSet(
+  makeNumericParam("eta",0.3,0.5),
+  makeNumericParam("gamma",0,0.5),
+  makeIntegerParam("max_depth",6,12),
+  makeNumericParam("min_child_weight",1,10),
+  makeNumericParam("subsample",0.5,1),
+  makeIntegerParam("nrounds",30,30),
+  makeNumericParam("colsample_bytree",0.5,1)
+)
+
+sc=makeTuneControlRandom(maxit = 5)
+
+
+kfold=makeResampleDesc("RepCV",folds=5,reps=5)
+
+
+kfold2=makeResampleDesc("CV",iters=5)
+
+lrn.xg.imp.tune=makeTuneWrapper(learner = lrn.xg.imp,par.set = ps,control = sc,resampling = kfold)
+
+
+tp=tuneParams(learner = lrn.xg.imp,task,par.set = ps,control = sc,resampling = kfold)
+
+mod=setHyperPars(lrn.xg.imp,par.vals = tp$x)
+resample(mod,task,rmse,resampling=kfold)
+
+
+
+resample(lrn.xg.imp.tune,task,rmse,resampling=kfold2)
+
+```
+```{r}
+lrn.xg.imp.tune$Hyperparameters
+```
+

@@ -1,0 +1,128 @@
+---
+title: "Untitled"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+   html_document:
+     code_folding: hide
+     fig_width : 6
+     fig_length : 4
+     theme : dark
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(massage = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+library(readxl)
+library(tidyverse)
+
+```
+
+
+```{r}
+
+library(mlbench)
+data(Soybean)
+Soybean
+```
+
+
+
+```{r}
+data=read_excel("D:/wallpapers and photos/csv/Emotional-and-behavioral.xlsx")
+
+```
+
+```{r}
+
+```
+
+```{r}
+data_new=as.data.frame(t(data))
+data_new1=data_new %>% 
+  select(-c(V1,V19,V4)) %>% 
+  rename(
+    'year'='V2','Total'='V3','Male'='V5','Female'='V6','Race/ethnicity'='V7','White, non-Hispanic (race)'='V8','Black, non-Hispanic(race)'='V9','Hispanic(race)'='V10','Males'='V11','White-non-Hispanic(males)'='V12','Black-non-Hispanic(male)'='V13','Hispanic(male)'='V14','Females'='V15','White-non-Hispanic(female)'='V16','Black-non-Hispanic(female)'='V17','Hispanic(female) '='V18'
+  ) %>% 
+  select(-c(`Race/ethnicity`,Males,Females)) %>% 
+  mutate(year=as.factor(year))
+
+
+rownames(data_new1)=NULL
+
+data_new1[1,1:13]=NA
+health_data=data_new1 %>% 
+  drop_na() %>% 
+  mutate_at(vars(     "Total"           ,           "Male"         ,              "Female"       ,             
+  "White, non-Hispanic (race)", "Black, non-Hispanic(race)" , "Hispanic(race)"    ,         "White-non-Hispanic(males)" ,
+ "Black-non-Hispanic(male)"  , "Hispanic(male)"   ,          "White-non-Hispanic(female)", "Black-non-Hispanic(female)",
+"Hispanic(female) "),~as.numeric(.)) %>% 
+   mutate_at(vars(     "Total"           ,           "Male"         ,              "Female"       ,             
+  "White, non-Hispanic (race)", "Black, non-Hispanic(race)" , "Hispanic(race)"    ,         "White-non-Hispanic(males)" ,
+ "Black-non-Hispanic(male)"  , "Hispanic(male)"   ,          "White-non-Hispanic(female)", "Black-non-Hispanic(female)",
+"Hispanic(female) "),~round(.)) 
+
+```
+
+```{r}
+health_data
+```
+
+```{r}
+library(patchwork)
+total=ggplot(health_data,aes(x=year,y=Total,fill=year))+
+  geom_bar(stat = "identity")
+  
+male=ggplot(health_data,aes(x=year,y=Male,fill=year))+
+  geom_bar(stat = "identity")
+
+female=ggplot(health_data,aes(x=year,y=Female,fill=year))+
+  geom_bar(stat = "identity")
+total
+(male/female)
+```
+
+**O**n average males are more emontionally disable in europe than female
+
+```{r}
+
+male_dist=replicate(
+  n=10000,
+expr=health_data %>%
+  slice_sample(n=3) %>% 
+  summarise(mean=mean(Male)) %>% 
+  pull(mean)
+)
+male_dist=tibble(male_dist)
+
+```
+
+```{r}
+
+```
+
+```{r}
+female_dist=replicate(
+  n=10000,
+expr=health_data %>%
+  slice_sample(n=3) %>% 
+  summarise(mean=mean(Female)) %>% 
+  pull(mean)
+)
+female_dist=tibble(female_dist)
+
+```
+
+```{r}
+female_dist=ggplot(female_dist,aes(x=female_dist))+
+  geom_histogram(bins = 6)
+
+
+male_dist=ggplot(male_dist,aes(x=male_dist))+
+  geom_histogram(bins = 6)
+
+
+
+male_dist/female_dist
+
+```
