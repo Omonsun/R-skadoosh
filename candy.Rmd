@@ -1,0 +1,241 @@
+---
+title: "ts workshop"
+author: "omon das"
+date: "`r Sys.Date()`"
+output:
+   html_document:
+     fig_length: 4
+     fig_width: 6
+     code_folding: hide
+     theme: dark
+  
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```  
+
+
+
+
+```{r}
+library(tidyverse)
+library(rstatix)
+library(fpp3)
+library(naniar)
+```
+
+
+
+```{r}
+candy=read.csv("D:\\wallpapers and photos\\csv\\candy_production.csv")
+```
+
+
+
+```{r}
+library(lubridate)
+vis_miss(candy)
+candy_new=candy %>% 
+  rename('production'='IPG3113N') %>%  mutate(observation_date=yearmonth(observation_date))
+  
+
+
+
+
+cndy=candy_new %>%
+as_tsibble(index =observation_date,regular = T) 
+
+cndy
+cdy=candy_new %>%
+tsibble(index =observation_date,regular = T) %>% 
+  fill_gaps()
+
+  
+```
+
+
+```{r}
+cndy
+cndy %>% 
+  autoplot(production)
+
+cndy %>% 
+  gg_season(production,labels = "both")
+
+
+cndy %>% 
+  gg_subseries(production)
+
+
+cndy %>% 
+  ACF(production) %>% autoplot()
+
+
+```
+
+
+```{r}
+dcmp=cndy %>% 
+  model(stl=STL(production))
+components(dcmp) %>% autoplot()
+
+```
+
+
+```{r}
+test=cndy %>% 
+  filter(year(observation_date)>2010)
+train=cndy %>% 
+  filter(year(observation_date)<2010)
+H=test %>% 
+  length()
+train
+  
+```
+
+```{r}
+fit=train %>% 
+  model(trend=TSLM(production~trend()+season())) %>% 
+  forecast()
+fit %>%
+  autoplot(train)
+```
+```{r}
+
+```
+
+
+
+
+
+```{r}
+fit6=train %>% 
+  model(stlf=decomposition_model(STL(production),NAIVE(season_adjust))) %>% 
+  
+  forecast(h=" 8 years") 
+fit6 %>% 
+  autoplot(train)
+```
+```{r}
+accuracy(fit,cndy)
+```
+```{r}
+train %>% 
+  model(stlf=decomposition_model(STL(production),NAIVE(season_adjust))) %>% 
+  gg_tsresiduals()
+```
+
+```{r}
+fit7=train %>% 
+  model(ETS(production))
+fit7 %>% 
+  report()
+fit7 %>% forecast(h="7.8 years") %>% autoplot(train)
+pred=fit7 %>% forecast(h="7 years")
+accuracy(pred,cndy)
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+train %>% 
+  mutate(production=difference(log(production),12) %>% difference(1)) %>% 
+  features(production,unitroot_kpss) 
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+train %>% 
+  mutate(production=difference(log(production),12) %>% difference(1)) %>% 
+  gg_tsdisplay()
+  #features(production,unitroot_ndiffs) 
+train %>% 
+  mutate(production=difference(log(production),12) %>% difference(1)) %>% 
+  ACF(lag_max = 50) %>% 
+  autoplot()
+train %>% 
+  mutate(production=difference(log(production),12) %>% difference(1)) %>% 
+  PACF(lag_max = 50) %>% 
+  autoplot()
+
+```
+#```{r}
+fit8=train %>% 
+  model(ARIMA(production,stepwise = F,approximation = F)) %>% 
+  forecast(h="8 years")
+fit8 %>% 
+  autoplot(train)
+
+train %>% 
+  model(ARIMA(production,stepwise = F,approximation = F)) %>% 
+  report()
+train %>% 
+  model(ARIMA(production,stepwise = F,approximation = F)) %>% 
+gg_tsresiduals()
+accuracy(fit8,cndy)
+
+```
+
+
+
+#```{r}
+accuracy(fit8,cndy)
+```
+
+
+
+```{r}
+fit9=train %>% 
+  model(ARIMA(production)) 
+fit9%>% 
+  forecast() %>% 
+  autoplot(train)
+
+train %>% 
+  model(ARIMA(production)) %>% 
+  report()
+train %>% 
+  model(ARIMA(production)) %>% 
+gg_tsresiduals()
+accuracy(fit9 %>% 
+           forecast(),cndy)
+```
+
+
+
+```{r}
+fit9 %>% augment() %>% 
+  features(.resid,ljung_box)
+
+fit9 %>% gg_tsresiduals()
+```
+
+
+
+```{r}
+Cstack_info() 
+```
+
