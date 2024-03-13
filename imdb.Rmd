@@ -1,0 +1,351 @@
+---
+title: "Untitled"
+author: "omon das"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+library(tidyverse)
+library(mlr)
+```
+
+
+```{r}
+
+imdb=read_csv("D:\\wallpapers and photos\\csv\\imdb_data.csv")
+
+
+
+
+
+```
+
+```{r}
+library(naniar)
+
+imdb
+
+```
+
+
+
+```{r}
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+```{r}
+
+imdb.clean=imdb %>% 
+  rename("adult"="isAdult","runtime"="runtimeMinutes") %>% 
+  separate(genres,into = c("gen1","gen2","gen3"),sep = ",") %>% 
+  select(-gen3,-adult)
+
+vis_miss(imdb)
+
+```
+
+
+
+
+```{r}
+imdb.clean
+```
+
+
+
+
+```{r}
+imdb.clean.numeric=imdb.clean %>% 
+  select(where(is.numeric))
+imdb.clean.numeric
+
+```
+
+
+
+
+```{r}
+#dimension reduction
+###
+#pca
+
+library(factoextra)
+
+imdb.clean.numeric.pca=imdb.clean.numeric %>% 
+  drop_na()
+
+pca=prcomp(imdb.clean.numeric.pca,center = T,scale. = T,)
+
+
+summary(pca)
+
+fviz_pca_var(pca)
+
+#meaning budget and gross is closely related and budget and gross is inversely correlated with avg rating
+
+fviz_screeplot(pca,addlabels=T)
+
+```
+
+
+
+
+```{r}
+imdb.pca=imdb.clean %>% 
+  drop_na(gross) %>% 
+  mutate(pca1=pca$x[,1],pca2=pca$x[,2])
+
+
+
+library(ggplot2)
+#for genre 1
+plot.pca.ratings=ggplot(imdb.pca) +
+ aes(x = pca1, y = pca2, colour = gen1) +
+ geom_point(shape = "circle", size = 1.5) +
+ scale_color_hue(direction = 1) +
+ theme_minimal() +
+ facet_wrap(vars(averageRating)) +
+geom_point() +
+theme_bw()
+
+plotly::ggplotly(plot.pca.ratings)
+
+
+#for genre 2
+
+plot.pca.ratings2=ggplot(imdb.pca) +
+ aes(x = pca1, y = pca2, colour = gen2) +
+ geom_point(shape = "square", size = 1.5) +
+ scale_color_hue(direction = 1) +
+ theme_minimal() +
+ facet_wrap(vars(averageRating)) +
+geom_point() +
+theme_bw()
+
+plotly::ggplotly(plot.pca.ratings2)
+
+```
+
+```{r}
+
+library(umap)
+
+# manifold based clustering
+imdb.clean.umap=imdb.clean.numeric %>%
+  drop_na(gross) %>%
+  scale() %>% 
+  as.matrix() %>% 
+  umap(n_neighbors=4,n_epochs=300,min_dist=0.4,metric="euclidean",verbose=T)
+
+
+
+
+
+
+```
+```{r}
+summary(imdb.clean.umap)
+
+imdb.umap=imdb.clean %>% 
+  drop_na(gross) %>%
+
+  mutate(umap1=imdb.clean.umap$layout[,1],umap2=imdb.clean.umap$layout[,2])
+  
+
+  
+
+```
+
+
+
+```{r}
+
+umap.gen1=ggplot(imdb.umap) +
+  aes(x = umap1, y = umap2, colour = gen1) +
+  geom_point(shape = "circle", size = 1.5) +
+  scale_color_hue(direction = -1) +
+  theme_bw() +
+  facet_wrap(vars(averageRating))
+
+plotly::ggplotly(umap.gen1)
+
+
+umap.gen2=ggplot(imdb.umap) +
+  aes(x = umap1, y = umap2, colour = gen2) +
+  geom_point(shape = "circle", size = 1.5) +
+  scale_color_hue(direction = -1) +
+  theme_bw() +
+  facet_wrap(vars(averageRating))
+
+plotly::ggplotly(umap.gen2)
+
+
+```
+
+```{r}
+####
+#som and lle
+
+
+#som
+
+library(kohonen)
+
+imdb.som=imdb.clean.numeric %>% 
+  drop_na(gross) %>% 
+  scale()
+
+somgrid=somgrid(xdim=12,ydim=10,topo="hexagonal",neighbourhood.fct="bubble",toroidal=FALSE)
+
+som=supersom(data=imdb.som,grid=somgrid,alpha=c(0.05,0.01),rlen=500)
+
+
+summary(som)
+
+plotTypes <- c("codes", "changes", "counts", "quality",
+"dist.neighbours", "mapping")
+
+
+
+plot=purrr::map(plotTypes,function(x){
+  plot(som,type=x,shape="straight")
+})
+
+imdb.clean.som=imdb.clean %>% 
+  drop_na(gross)
+
+
+x=plot(som, type = "mapping", pch = 21,
+bg =  factor(imdb.clean.som$gen1),
+shape = "straight",bgcol="white")
+
+
+
+
+```
+
+
+```{r}
+
+library(Rdimtools)
+
+lle=do.lle(imdb.clean.numeric.pca %>% as.matrix(),ndim = 2,type=c("knn",2:4),regtype = T)
+
+
+
+```
+
+
+```{r}
+imdb.lle=imdb.clean %>% 
+  drop_na(gross) %>%
+
+  mutate(lle1=lle$Y[,1],lle2=lle$Y[,2])
+imdb.lle
+
+plot.lle.ratings2=ggplot(imdb.lle) +
+ aes(x = lle1, y = lle2, colour = gen1) +
+ geom_point(shape = "square", size = 1.5) +
+ scale_color_hue(direction = 1) +
+ theme_minimal() +
+ facet_wrap(vars(averageRating)) +
+geom_point() +
+theme_bw()
+
+plotly::ggplotly(plot.lle.ratings2)
+
+
+```
+
+
+```{r}
+
+imdb.clean
+
+library(FSelectorRcpp)
+
+task=makeRegrTask(data = imdb.clean.numeric,target = "averageRating")
+
+
+lrn.gam=makeLearner("regr.gamboost")
+
+lrn.gam.filter=mlr::makeFilterWrapper(learner = lrn.gam,fw.method="linear.correlation")
+
+library(rpart)
+
+imputemethod=imputeLearner("regr.rpart")
+
+lrn.gam.f.impute=makeImputeWrapper(learner = lrn.gam.filter,classes=list(numeric=imputemethod))
+
+ps=makeParamSet(
+  makeNumericParam("fw.perc",0.01,0.7))
+
+cv=makeResampleDesc("RepCV",folds=5,reps=10)
+
+sc=makeTuneControlRandom(maxit = 10)
+
+#resample
+lrn.cv=makeTuneWrapper(lrn.gam.f.impute,resampling = cv,par.set = ps,control = sc)
+
+outercv=makeResampleDesc("CV",iters=5)
+
+cv=resample(learner = lrn.cv,task = task,resampling = outercv,rmse)
+
+cv
+
+```
+
+```{r}
+
+tp=tuneParams(learner = lrn.gam.f.impute,task=task,resampling = outercv,par.set = ps,control = sc)
+
+lrn.gam.f.impute.tp=setHyperPars(learner = lrn.gam.f.impute, par.vals = tp$x)
+
+
+```
+```{r}
+lrn.gam.f.impute.tp
+
+model.gamboost=train(learner = lrn.gam.f.impute.tp, task = task)
+
+
+model.gam.data=getLearnerModel(model.gamboost,more.unwrap = T)
+
+```
+
+```{r}
+par(mfrow=c(1,3))
+plot(model.gam.data)
+
+
+plot(model.gam.data$fitted(), resid(model.gam.data))
+qqnorm(resid(model.gam.data))
+qqline(resid(model.gam.data))
+
+```
+
